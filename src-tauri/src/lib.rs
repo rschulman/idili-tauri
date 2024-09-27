@@ -12,12 +12,13 @@ use veilid_core::{
 
 #[cfg(target_os = "android")]
 use jni::{
-    objects::{JClass, JObject},
+    objects::{JClass, JObject, JString},
     JNIEnv,
 };
 
 static MAIN_WINDOW: OnceLock<tauri::WebviewWindow> = OnceLock::new();
 static VEILID_API: OnceLock<VeilidAPI> = OnceLock::new();
+static FILE_BASE: OnceLock<String> = OnceLock::new();
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum IdiliError {
@@ -101,6 +102,22 @@ pub extern "system" fn Java_org_westwork_idili_MainActivity_init_1android(
     veilid_core::veilid_core_setup_android(env, ctx);
 }
 
+#[cfg(target_os = "android")]
+#[no_mangle]
+#[allow(non_snake_case)]
+pub extern "system" fn Java_org_westwork_idili_MainActivity_filelocation(
+    mut env: JNIEnv,
+    _class: JClass,
+    path: JString,
+) {
+    let rpath: String = env
+        .get_string(&path)
+        .expect("Couldn't get path from Java string!")
+        .into();
+
+    FILE_BASE.get_or_init(|| rpath);
+}
+
 fn update_callback(change: VeilidUpdate) {
     if let Some(win) = MAIN_WINDOW.get() {
         match change {
@@ -171,22 +188,23 @@ pub fn run() {
 }
 
 async fn init_veilid() -> VeilidAPIResult<VeilidAPI> {
+    let file_loc = FILE_BASE.get_or_init(|| ".".to_string());
     info!("Starting Veilid...");
     let config = VeilidConfigInner {
         program_name: "idili-tauri".into(),
         protected_store: VeilidConfigProtectedStore {
             allow_insecure_fallback: true,
             always_use_insecure_storage: false,
-            directory: "../.store/protected".into(),
+            directory: format!("{file_loc}/.store/protected").into(),
             delete: false,
             ..Default::default()
         },
         block_store: VeilidConfigBlockStore {
-            directory: "../.store/block".into(),
+            directory: format!("{file_loc}/.store/block").into(),
             delete: false,
         },
         table_store: VeilidConfigTableStore {
-            directory: "../.store/table".into(),
+            directory: format!("{file_loc}/.store/table").into(),
             delete: false,
         },
         network: VeilidConfigNetwork {

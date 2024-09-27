@@ -1,9 +1,9 @@
 use std::{env, path::Path};
 
-const DEFAULT_CLANG_VERSION: &str = "18";
+const DEFAULT_CLANG_VERSION: &str = "17";
 
 fn main() {
-    setup_x86_64_android_workaround();
+    //    setup_x86_64_android_workaround();
     tauri_build::build()
 }
 
