@@ -2,3 +2,4 @@
 /target/
 /Cargo.lock
 /src-tauri/gen/android/keystore.properties
+src-tauri/.store/table
