@@ -1,0 +1,13 @@
+[tasks.tailwind]
+workspace = false
+command = "tailwindcss"
+args = ["-i", "input.css", "-o", "idili.css", "--watch"]
+
+[tasks.tauri]
+workspace = false
+command = "cargo"
+args = ["tauri", "dev"]
+
+[tasks.dev]
+workspace = false
+run_task = { name = ["tailwind", "tauri"], fork = true, parallel = true }
