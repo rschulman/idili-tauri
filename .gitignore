@@ -3,3 +3,6 @@
 /Cargo.lock
 /src-tauri/gen/android/keystore.properties
 src-tauri/.store/table
+idili.css
+.DS_Store
+src-tauri/gen/android/.idea
