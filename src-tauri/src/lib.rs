@@ -40,31 +40,11 @@ async fn connect_veilid() -> Result<(), VeilidAPIError> {
 }
 
 #[tauri::command]
-async fn get_node_id() -> Result<String, VeilidAPIError> {
-    match VEILID_API.get() {
-        None => Ok("".into()),
-        Some(veilid) => {
-            let id = veilid
-                .get_state()
-                .await?
-                .config
-                .config
-                .network
-                .routing_table
-                .node_id;
-            let id = id.first().map_or("".into(), |ct| ct.to_string());
-            Ok(id)
-        }
-    }
-}
-
-#[tauri::command]
 async fn lookup(address: &str) -> Result<String, IdiliError> {
     match VEILID_API.get() {
         None => Err(IdiliError::VeilidError),
         Some(veilid) => {
             let key: veilid_core::CryptoTyped<veilid_core::CryptoKey> = address.parse().unwrap();
-            println!("{:?}", key);
             let _ = veilid
                 .routing_context()
                 .unwrap()
@@ -76,7 +56,6 @@ async fn lookup(address: &str) -> Result<String, IdiliError> {
                 .unwrap()
                 .get_dht_value(key, 0, true)
                 .await;
-            println!("{get_value:?}");
             match get_value {
                 Ok(res) => {
                     if let Some(data) = res {
@@ -129,12 +108,9 @@ fn update_callback(change: VeilidUpdate) {
             }
             VeilidUpdate::Attachment(attachment) => {
                 info!("Attachment event: {:?}", attachment);
-                let _ = win.emit("veilid_connected", attachment);
-                // Handle the attachment here
+                let _ = win.emit("veilid_connected", attachment.public_internet_ready);
             }
-            VeilidUpdate::Network(network) => {
-                let network = *network;
-            }
+            VeilidUpdate::Network(_) => {}
             VeilidUpdate::RouteChange(route_change) => {
                 info!("RouteChange event: {:?}", route_change);
                 // Handle the route change here
@@ -155,11 +131,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         //.plugin(tauri_plugin_veilid::init())
-        .invoke_handler(tauri::generate_handler![
-            connect_veilid,
-            get_node_id,
-            lookup
-        ])
+        .invoke_handler(tauri::generate_handler![connect_veilid, lookup])
         .setup(|app| {
             info!("Setting up tauri app");
             tauri::async_runtime::block_on(async {

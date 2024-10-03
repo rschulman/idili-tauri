@@ -1,6 +1,8 @@
-use leptos::leptos_dom::ev::SubmitEvent;
-use leptos::*;
+use leptos::prelude::*;
+use leptos::spawn::spawn_local;
+use leptos::web_sys::SubmitEvent;
 use serde::{Deserialize, Serialize};
+use thaw::*;
 use wasm_bindgen::prelude::*;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -13,42 +15,7 @@ struct Event {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 enum EventPayload {
-    VeilidConnected(AttachEvent),
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct AttachEvent {
-    state: VeilidAttachmentState,
-    public_internet_ready: bool,
-    local_network_ready: bool,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum VeilidAttachmentState {
-    Detached = 0,
-    Attaching = 1,
-    AttachedWeak = 2,
-    AttachedGood = 3,
-    AttachedStrong = 4,
-    FullyAttached = 5,
-    OverAttached = 6,
-    Detaching = 7,
-}
-
-impl std::fmt::Display for VeilidAttachmentState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let out = match self {
-            VeilidAttachmentState::Attaching => "Attaching".to_owned(),
-            VeilidAttachmentState::AttachedWeak => "Attached Weak".to_owned(),
-            VeilidAttachmentState::AttachedGood => "Attached Good".to_owned(),
-            VeilidAttachmentState::AttachedStrong => "Attached Strong".to_owned(),
-            VeilidAttachmentState::FullyAttached => "Fully Attached".to_owned(),
-            VeilidAttachmentState::OverAttached => "Over Attached".to_owned(),
-            VeilidAttachmentState::Detaching => "Detaching".to_owned(),
-            VeilidAttachmentState::Detached => "Detached".to_owned(),
-        };
-        write!(f, "{}", out)
-    }
+    VeilidConnected(bool),
 }
 
 #[wasm_bindgen]
@@ -70,9 +37,9 @@ struct LookupArgs<'a> {
 
 #[component]
 pub fn App() -> impl IntoView {
-    let (connected, set_connected) = create_signal(None);
-    let (dht_address, set_dht_address) = create_signal("".to_string());
-    let (dht_content, set_dht_content) = create_signal("".to_string());
+    let (connected, set_connected) = signal(false);
+    let (dht_address, set_dht_address) = signal("".to_string());
+    let (dht_content, set_dht_content) = signal("".to_string());
 
     let lookup = move |ev: SubmitEvent| {
         ev.prevent_default();
@@ -93,45 +60,51 @@ pub fn App() -> impl IntoView {
         set_dht_address.set(v);
     };
 
-    create_local_resource(
-        || (),
-        move |_| async move {
-            let cb = Closure::<dyn Fn(JsValue)>::new(move |e: JsValue| {
-                log::info!("Veilid State: {e:?}");
-                let ev = serde_wasm_bindgen::from_value::<Event>(e).unwrap();
-                set_connected.set(Some(ev));
-            });
-            listen("veilid_connected", &cb)
-                .await
-                .expect("Failed to create listener");
-            cb.forget();
-        },
-    );
+    let cb = Closure::<dyn Fn(JsValue)>::new(move |e: JsValue| {
+        log::info!("Veilid State: {e:?}");
+        let ev = serde_wasm_bindgen::from_value::<Event>(e).unwrap();
+        match ev.payload {
+            EventPayload::VeilidConnected(c) => set_connected(c),
+        }
+    });
+
+    spawn_local(async move {
+        let _ = listen("veilid_connected", &cb).await;
+        cb.forget();
+    });
 
     view! {
         <main class="container">
-            <div>Veilid is
-             { move || {
-                 if let Some(s) = connected.get() {
-                     match s.payload {
-                         EventPayload::VeilidConnected(conn) => conn.state.to_string(),
-                     }
-                 } else {
-                     "... unknown!".to_string()
-                 }
-               }
-            }
-            </div>
-            <div>
-            <form on:submit=lookup>
-                <input
-                    id="address-input"
-                    placeholder="Enter a DHT address"
-                    on:input=update_address
-                />
-                <button type="submit">Lookup</button>
-            </form>
-            </div>
+            <Layout>
+                <LayoutHeader class="bg-emerald-50">
+                    <Flex justify=FlexJustify::SpaceBetween>
+                        <Icon icon=icondata::AiAlignLeftOutlined class="m-2" width="36" height="36" />
+                        "Idili"
+                        <Show
+                            when=move || { connected() }
+                            fallback=|| view! { <Icon icon=icondata::TbLinkOff class="m-2" width="36" height="36" /> }
+                        >
+                            <Icon icon=icondata::TbLink class="m-2" width="36" height="36" />
+                        </Show>
+                    </Flex>
+                </LayoutHeader>
+                <Layout>
+                    <Flex justify=FlexJustify::Center>
+                    <form on:submit=lookup>
+                        <Field
+                            label="DHT Lookup"
+                            name="address-input"
+                            on:input=update_address
+                        >
+                            <Input />
+                        </Field>
+                        <Button button_type=ButtonType::Submit>
+                            "Submit"
+                        </Button>
+                    </form>
+                    </Flex>
+                </Layout>
+            </Layout>
 
             <div>{move || dht_content.get() } </div>
         </main>
